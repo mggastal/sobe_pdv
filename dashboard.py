@@ -494,7 +494,7 @@ def linkedin_raw(df):
     print(f"     LinkedIn RAW: {len(rows)} linhas | {agg['campaign'].nunique()} campanhas | {agg['grupo'].nunique()} grupos")
     return rows
 
-# ══ LINKEDIN — CRIATIVOS (só PDV) ══════════════════════
+# ══ LINKEDIN — CRIATIVOS ══════════════════════
 # A aba linkedin-ads traz "Creative URL (Adhoc)": uma linha por criativo por dia.
 # Chave do criativo = id da imagem no caminho da URL (.../image/v2/<ID>/...), que não muda;
 # a imagem é baixada para imgs/ porque o link do LinkedIn expira.
@@ -507,8 +507,13 @@ def linkedin_criativos(df, img_dir):
     if not len(df) or "cr_url" not in df.columns: return {"meta": {}, "rows": []}
     df = df.copy()
     df["cr_url"] = df["cr_url"].fillna("").astype(str)
+    nomes = df["creative"].fillna("").astype(str).str.strip() if "creative" in df.columns else ""
     df["k"] = df["cr_url"].map(_li_chave)
-    df = df[df["k"] != ""]
+    # sem imagem (ex.: publicação impulsionada): chave pelo nome/número do criativo
+    sem = (df["k"] == "") & (nomes != "") & (nomes != "nan")
+    df.loc[sem, "k"] = "n_" + nomes[sem]
+    # sem imagem e sem nome (comum no histórico antigo): agrupa por campanha, para a soma bater com o total
+    df.loc[df["k"] == "", "k"] = "c_" + df.loc[df["k"] == "", "campaign"].astype(str)
     if not len(df): return {"meta": {}, "rows": []}
     meta = {}
     for k, sub in df.groupby("k"):
@@ -517,6 +522,7 @@ def linkedin_criativos(df, img_dir):
         fname = f"li_{re.sub(r'[^A-Za-z0-9_-]', '', k)}.jpg"
         fp = img_dir / fname
         try:
+            if k.startswith(("n_", "c_")): raise ValueError("sem imagem")
             if not fp.exists():
                 r = requests.get(ult["cr_url"], timeout=15, headers={"User-Agent": "Mozilla/5.0"})
                 if r.status_code == 200: fp.write_bytes(r.content)

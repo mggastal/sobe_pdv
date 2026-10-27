@@ -79,7 +79,7 @@
     if (!lst.length){ el.innerHTML = `<div style="color:var(--muted2);font-size:12px;padding:12px">Nenhum criativo com veiculação no período.</div>`; return; }
     el.innerHTML = lst.map(o => {
       const m = CR.meta[o.k] || {};
-      const nome = m.n || ('Criativo · #' + o.k.slice(-6));
+      const nome = m.n || (o.k.startsWith('c_') ? 'Criativo não identificado' : 'Criativo · #' + o.k.slice(-6));
       return `<div class="licr-card">
         <div class="licr-img">${m.th ? `<img src="${m.th}" loading="lazy" alt="">` : '<span style="color:var(--muted2);font-size:11px">sem imagem</span>'}</div>
         <div class="licr-body">
