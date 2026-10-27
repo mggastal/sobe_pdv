@@ -23,12 +23,10 @@
   .licr-zoom img{max-width:92vw;max-height:92vh;border-radius:8px}`;
   document.head.appendChild(st);
 
-  // seção logo abaixo de "Campanhas"
+  // ordem da página: Campanhas → Objetivos de campanha → Criativos
   const camps = document.getElementById('liCamps');
   if (!camps) return;
-  // "Objetivos de campanha" sobe para antes de "Campanhas" (pedido do cliente)
   const obj = document.getElementById('liObjSection');
-  if (obj) camps.closest('.section').before(obj);
   const sec = document.createElement('div');
   sec.className = 'section';
   sec.id = 'liCriativosSection';
@@ -39,7 +37,7 @@
       <button class="pb" data-o="cl" style="font-size:10px;padding:3px 8px">Cliques</button>
       <button class="pb" data-o="ctr" style="font-size:10px;padding:3px 8px">CTR</button>
     </div></div><div class="licr-grid" id="liCriativos"></div>`;
-  camps.closest('.section').after(sec);
+  (obj || camps.closest('.section')).after(sec);
 
   let ordem = 'sp';
   document.getElementById('licrOrd').onclick = e => {
