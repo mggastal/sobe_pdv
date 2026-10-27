@@ -63,6 +63,9 @@ window.DASH_BASE_URL = '${BASE_URL}';
         .replace('Funil de Captação · All Conversions', 'Funil de Captação · Conversões')
         .replace('<div class="kpi-sub">All Conversions', '<div class="kpi-sub">Conversions');
 
+      // Criativos do LinkedIn (script só deste cliente)
+      templateHtml = templateHtml.replace('</body>', '<script src="./li_criativos.js"><\/script></body>');
+
       document.open();
       document.write(templateHtml);
       document.close();

@@ -430,6 +430,7 @@ def load_linkedin():
         "Campaign Objective Type":"obj",
         "Creative Name (Creative)":"creative",
         "Campaign Status":"status",
+        "Creative URL (Adhoc)":"cr_url",
         **LI_COLS,
     })
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -492,6 +493,50 @@ def linkedin_raw(df):
         })
     print(f"     LinkedIn RAW: {len(rows)} linhas | {agg['campaign'].nunique()} campanhas | {agg['grupo'].nunique()} grupos")
     return rows
+
+# ══ LINKEDIN — CRIATIVOS (só PDV) ══════════════════════
+# A aba linkedin-ads traz "Creative URL (Adhoc)": uma linha por criativo por dia.
+# Chave do criativo = id da imagem no caminho da URL (.../image/v2/<ID>/...), que não muda;
+# a imagem é baixada para imgs/ porque o link do LinkedIn expira.
+
+def _li_chave(url):
+    m = re.search(r"/image/v2/([^/]+)/", str(url))
+    return m.group(1) if m else ""
+
+def linkedin_criativos(df, img_dir):
+    if not len(df) or "cr_url" not in df.columns: return {"meta": {}, "rows": []}
+    df = df.copy()
+    df["cr_url"] = df["cr_url"].fillna("").astype(str)
+    df["k"] = df["cr_url"].map(_li_chave)
+    df = df[df["k"] != ""]
+    if not len(df): return {"meta": {}, "rows": []}
+    meta = {}
+    for k, sub in df.groupby("k"):
+        ult = sub.sort_values("date").iloc[-1]
+        th = ""
+        fname = f"li_{re.sub(r'[^A-Za-z0-9_-]', '', k)}.jpg"
+        fp = img_dir / fname
+        try:
+            if not fp.exists():
+                r = requests.get(ult["cr_url"], timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+                if r.status_code == 200: fp.write_bytes(r.content)
+            if fp.exists():
+                th = "imgs/" + fname; THUMBS_USADAS.add(fname)
+        except Exception: pass
+        nome = next((n for n in sub.get("creative", []) if str(n).strip() and str(n) != "nan"), "")
+        meta[k] = {"th": th, "c": str(ult["campaign"]), "g": str(ult["grupo"]), "n": str(nome),
+                   "st": _li_status(sub)}
+    cols = {"sp":"spend","imp":"impressions","cl":"clicks","lpc":"lpc","ld":"leads","eng":"engagement",
+            "fol":"follows","pcl":"page_clicks","com":"comments","sha":"shares","rea":"reactions","vv":"video_views"}
+    agg = df.groupby(["date","k"]).agg(**{c: (v, "sum") for c, v in cols.items()}).reset_index()
+    rows = []
+    for _, r in agg.iterrows():
+        if not any(r[c] for c in cols): continue
+        o = {"d": r["date"].strftime("%d/%m/%Y"), "k": r["k"]}
+        for c in cols: o[c] = round(float(r[c]), 2) if c == "sp" else int(r[c])
+        rows.append(o)
+    print(f"     LinkedIn criativos: {len(meta)} criativos | {sum(1 for m in meta.values() if m['th'])} imagens | {len(rows)} linhas")
+    return {"meta": meta, "rows": rows}
 
 # ══ MAIN ═══════════════════════════════════════════════
 # ══ GOOGLE ADS ════════════════════════════════════════
@@ -773,11 +818,13 @@ def main():
         g_month={"lbl":[],"totalS":[],"totalConv":[],"cpaG":[],"cpcG":[],"ctrG":[],"camps":[]}
         g_raw=[]
 
-    li_raw = []
+    li_raw = []; li_cr = {"meta": {}, "rows": []}
     if USAR_LINKEDIN:
         print("\n[LINKEDIN ADS]")
         try:
-            li_raw = linkedin_raw(load_linkedin())
+            _df_li = load_linkedin()
+            li_raw = linkedin_raw(_df_li)
+            li_cr = linkedin_criativos(_df_li, img_dir)
         except Exception as e:
             print(f"  Aviso LinkedIn: {e}")
             li_raw = []
@@ -802,6 +849,7 @@ def main():
         "GOOGLE_RAW":        g_raw,
         "LINKEDIN_RAW":      li_raw,
         "USAR_LINKEDIN":     bool(USAR_LINKEDIN and li_raw),
+        "LINKEDIN_CRIATIVOS": li_cr,
         "NOME_CLIENTE":      NOME_CLIENTE,
         "LOGO_LETRA":        LOGO_LETRA,
         "COR_ACENTO":        COR_ACENTO,
